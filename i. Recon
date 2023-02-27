@@ -1,0 +1,266 @@
+===General===
+Prioritise looking for:
+     AD connectivity
+     mail gateways
+     web apps
+     file storage
+
+determine CSP based on IP space 
+     Azure Netblocks
+          Public: https://www.microsoft.com/en-us/download/details.aspx?id=56519
+          US Gov: http://www.microsoft.com/en-us/download/details.aspx?id=57063
+          Germany: http://www.microsoft.com/en-us/download/details.aspx?id=57064 
+          China: http://www.microsoft.com/en-us/download/details.aspx?id=57062
+     
+     AWS Netblocks
+          https://ip-ranges.amazonaws.com/ip-ranges.json
+
+     GCP Netblocks
+          https://www.gstatic.com/ipranges/cloud.json
+
+     script to check against list of target IPs
+          github.com/oldrho/ip2provider
+
+          cat iplist.txt | python ip2provider
+
+determine CSP based on MX records
+     O365 
+          target-domain.mail.protection.outlook.com
+     Google Workspace
+          google.com, googlemail.com
+     Proofpoint
+          pphosted.com
+
+Tools:
+     recon-ng
+     OWASP Amass
+     Spiderfoot
+     Gobuster/Feroxbuster
+     Sublist3r
+
+     Google dorks
+          site:targetdomain.com -site:www.targetdomain.com
+     Baidu
+     DuckDuckGo
+
+     crt.sh
+
+     censys.io
+     shodan.io
+          org:"Target name"
+          net:"CIDR range"
+          port:"443"
+
+     DNS brute-forcing
+          github.com/danielmiessler/SecLists/tree/master/Discovery/DNS
+
+     hackertarget.com
+     threatcrowd.org
+     dnsdumpster.com
+     whois.arin.net/ui
+
+
+O365 usage (plus federated or managed)
+     https://login.microsoftonline.com/getuserrealm.srf?login=<username>@<targetdomain>.com&xml=1
+
+     https://login.microsoftonline.com/<target domain>/v2.0/.well-known/openid-configuration
+
+Google Workspace Usage
+     Try authenticating with a valid email address at Gmail
+          invalid email = "Couldn't find your Google Account"
+          valid email => password prompt
+
+AWS Usage
+     Pulling content from S3 buckets
+     Burp Suite - check for any requests to:
+          https://[bucketname].s3.amazonaws.com
+          https://s3-[region].amazonaws.com/[Org Name]
+
+Box.com Usage
+     Look for any login portals
+          https://companyname.account.box.com
+
+Employees OSINT
+     Generate user list
+          hunter.io
+
+          intext:"@<domain.tld>"
+
+          LinkedIn
+
+          Peasant - may not work anymore
+               https://github.com/arch4ngel/peasant
+
+          recon-ng Bing LinkedIn Cache module
+
+     Determine username schema via public file Metadata (PDF, DOCX, XLSX, etc.)
+     
+          PowerMeta
+               https://github.com/dafthack/PowerMeta
+          FOCA
+               https://github.com/ElevenPaths/FOCA
+
+User Enumeration
+     Azure 
+          https://login.Microsoft.com/common/oauth2/token
+          endpoint tells you if a user exists or not
+
+     Detect invalid users while password spraying
+          https://github.com/dafthack/MSOLSpray 
+
+     On-prem OWA/EWS - enumerate with timing attack
+          MailSniper
+
+
+
+===Azure===
+
+Is the organization using Azure AD?
+
+     Install-Module AADInternals
+     Import-Module AADInternals
+     Get-AADIntLoginInformation -UserName <arbitrary_email>
+
+     Look for "Account Type: Managed" and Domain Name
+     Note: if user exists, "Exists" will be 0 (yes, that's right)
+
+ID of Azure Tenant
+     Get-AADIntTenantID -Domain <domain>.onmicrosoft.com 
+
+Cloud_Enum
+     search for public resources in AWS, Azure, and GCP
+     https://github.com/initstring/cloud_enum
+ 
+     python3 cloud_enum.py -k <name-to-search>
+
+Validate Azure/O365 email IDs
+     harvest emails to get list of emails to test
+
+     o365creeper 
+          https://github.com/LMGsec/o365creeper
+
+          py o365creeper.py -f /path/to/test/list -o /path/to/output
+
+List Azure Services used by the organization
+     MicroBurst 
+          https://github.com/NetSPI/MicroBurst
+
+     Import-Module .\MicroBurst.psm1
+     Invoke-EnumerateAzureSubDomains -Base <domain_base> -Verbose 
+
+List Azure Blobs
+     MicroBurst 
+          https://github.com/NetSPI/MicroBurst
+
+     Import-Module .\MicroBurst.psm1
+     Invoke-EnumerateAzureBlobs -Base <domain>
+
+View Azure Blobs
+     Try the URL (e.g. https://<domain>.blob.core.windows.net/<blob_name>
+
+          Blobs - `*.blob.core.windows.net`
+          File Services - `*.file.core.windows.net`
+          Data Tables - `*.table.core.windows.net`
+          Queues - `*.queue.core.windows.net`
+
+     If you get a blank page, press Ctrl+F5 in the borwser
+          check for SAS URL
+
+     Use SAS URL with Azure Storage Explorer
+          https://azure.microsoft.com/en-us/products/storage/storage-explorer
+
+          Open Connect Dialog
+          Blob container
+          Shared access signature (SAS)
+          Next
+          Copy URL in 'Blob container SAS URL' field
+               display name will be populated automatically
+          Next
+
+
+
+
+===AWS===
+
+Cloud_Enum
+     search for public resources in AWS, Azure, and GCP
+     https://github.com/initstring/cloud_enum
+ 
+     python3 cloud_enum.py -k <name-to-search>
+
+AWS S3 buckets set public
+     https://[bucketname].s3.amazonaws.com
+     https://s3-[region].amazonaws.com/[Org Name]
+
+     aws s3 ls s3://<bucketname>/ --profile=<profile_name>
+     aws s3 sync s3://<bucketname>/ <local_dir_to_create> --profile=<profile_name>
+
+     Check if bucket is also writeable
+          for code injection - BEEF hook is good PoC
+          
+          aws s3 mv test.txt s3://<bucketname> --profile=<profile_name>
+
+     Look for 404s to *.s3.amazonaws.com 
+          may have Code: NoSuchBucket
+          for domain hijack
+          create S3 bucket with same name in same region
+          load PoC content to bucket
+
+AWS EBS (virtual hard disks) set public
+     https://github.com/bishopfox/dufflebag
+
+
+===GCP===
+
+Cloud_Enum
+     search for public resources in AWS, Azure, and GCP
+     https://github.com/initstring/cloud_enum
+ 
+     python3 cloud_enum.py -k <name-to-search>
+
+
+===OTHER===
+
+ip2Provider
+     Check a list of IP addresses against cloud provider IP space
+     https://github.com/oldrho/ip2provider
+
+Key Disclosure in Public Repos
+          shhgit.darkport.co.uk
+          github.com/eth0izzle/shhgit
+
+          search private repos and commit history
+
+          GitLeaks
+               https://github.com/zricethezav/gitleaks
+          Gitrob
+               https://github.com/michenriksen/gitrob
+          Truffle Hog
+               https://github.com/dxa4481/truffleHog
+
+     Pillage Git Repos
+
+          GitLeaks
+               git clone https://github.com/zricethezav/gitleaks.git
+
+               sudo docker run --rm -v local/path/to/gitleaks:/tmp/gitleaks --name=gitleaks <target_repo> detect -v --source /tmp/gitleaks
+
+               Review the commit where the leak is
+               https://github.com/<git_account>/<repo_name>/commit/<commit_ID_from_gitleaks_output>
+
+               Pull GitLeaks with Docker
+                    sudo docker pull zricethezav/gitleaks
+
+               Print the help menu
+                    sudo docker run --rm --name=gitleaks zricethezav/gitleaks --help
+
+               Use GitLeaks to search for secrets
+                    sudo docker run --rm --name=gitleaks zricethezav/gitleaks -v -r <repo URL>
+
+          TruffleHog
+               https://github.com/dxa4481/truffleHog 
+          Shhgit
+               https://github.com/eth0izzle/shhgit
+          Gitrob
+               https://github.com/michenriksen/gitrob
+
