@@ -1,0 +1,63 @@
+===Azure===
+
+Az module
+	download using MSI package 
+		https://github.com/Azure/azure-powershell/releases
+		takes a long time if installed using Install-Module
+
+	or Import-Module Az
+
+AzureAD module - doesn't play well with Az Powershell module
+    Install-module AzureAD
+    $passwd = ConvertTo-SecureString "<password>" -AsPlainText -Force
+    $creds = New-Object System.Management.Automation.PSCredential ("<username>@<domain>.onmicrosoft.com", $passwd)
+    Connect-AzureAD -Credential $creds
+
+Az CLI
+	az login -u <username>@<domain>.onmicrosoft.com -p <password>
+
+
+===AWS===
+
+
+Access Level for Review 
+     ReadOnlyAccess or SecurityAudit AWS policies 
+          (SecurityAudit cannot read bucket or database contents?)
+
+Accessing Control Plane through Web Console
+     https://<account_id>.signin.aws.amazon.com/console
+          req's username, password, and (potentially) MFA
+
+Accessing Control Plane through CLI
+     aws configure
+          req's configuration and API Keys
+               Access Key ID
+               Secret Access Key
+               AWS Region
+               Output format (json/test/table)
+          To use config and credentials files move them to .aws folder in home directory
+
+Typical initial workflow:
+     Test that credentials function and determine principal you are acting as
+          aws sts get-caller-identity 
+
+     If client gave you a user, retrieve a list of your policies and determine if you have permissions to do so 
+          aws iam list-user-policies --user-name [USER_NAME] 
+          useful to troubleshoot permissions
+
+     If client gave you a role, retrieve a list of your policies and determine if you have permissions to do so 
+          aws iam list-attached-role-policies --role-name [ROLE_NAME]
+          useful to troubleshoot permissions
+
+     If the client provided web console (recommended), you can easily determine lack of some permissions by attempting to browse through IAM. You'll get nice permissions errors at the top of the page if your principal hasn't been assigned the correct managed policies.
+
+Refining Output
+     aws <resource> <command> --query <parameters>
+          e.g. List only region name 
+               aws ec2 describe-regions --query "Regions[*].{Region:RegionName}"
+
+     aws <resource> <command> --filter <parameters>
+          e.g. List only results for eu-west-2 AZ
+               aws ec2 describe-regions --filter "Name=region-name,Values=eu-west-2"
+          wildcards allowed for strings
+
